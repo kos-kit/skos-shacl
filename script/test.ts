@@ -4,12 +4,24 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { printTable } from "console-table-printer";
+import PrefixMap from "@rdfjs/prefix-map/PrefixMap.js";
+import { sh, skos } from "@tpluscode/rdf-ns-builders";
+import { Term } from "@rdfjs/types";
 
 const rootDirectoryPath = path.resolve(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 );
 const dataDirectoryPath = path.join(rootDirectoryPath, "data");
 const invalidDataDirectoryPath = path.join(dataDirectoryPath, "invalid");
+const prefixMap = new PrefixMap(
+  [
+    ["", rdf.namedNode("http://kos-kit.github.io/skos-shacl/ns#")],
+    ["hasset", rdf.namedNode("https://hasset.ukdataservice.ac.uk/")],
+    ["sh", sh[""]],
+    ["skos", skos[""]],
+  ],
+  { factory: rdf }
+);
 const shapesDirectoryPath = path.join(rootDirectoryPath, "shapes");
 const shapesFileOrder = ["skos-shacl-spec.ttl"];
 const validDataDirectoryPath = path.join(dataDirectoryPath, "valid");
@@ -38,6 +50,21 @@ async function getDataFilePaths(
     }
     return [path.join(dirent.parentPath, dirent.name)];
   });
+}
+
+function termToString(term: Term | null): string {
+  if (term === null) {
+    return "";
+  }
+  switch (term.termType) {
+    case "BlankNode":
+    case "Literal":
+      return term.value;
+    case "NamedNode":
+      return prefixMap.shrink(term)?.value ?? term.value;
+    default:
+      throw new RangeError(term.termType);
+  }
 }
 
 async function main() {
@@ -77,15 +104,20 @@ async function main() {
         exitCode++;
       }
       printTable(
-        report.results.map((result) => ({
-          shapesFileName,
-          severity: result.severity,
-          message: result.message,
-          path: result.path,
-          focusNode: result.focusNode,
-          sourceConstraintComponent: result.sourceConstraintComponent,
-          sourceShape: result.sourceShape,
-        }))
+        report.results.flatMap((result, resultI) =>
+          result.message.map((message) => ({
+            "#": resultI,
+            shapesFileName,
+            message: termToString(message),
+            severity: termToString(result.severity),
+            path: termToString(result.path),
+            focusNode: termToString(result.focusNode),
+            sourceConstraintComponent: termToString(
+              result.sourceConstraintComponent
+            ),
+            sourceShape: termToString(result.sourceShape),
+          }))
+        )
       );
     }
   }

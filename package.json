@@ -1,9 +1,12 @@
 {
   "description": "SHACL shapes for SKOS",
   "devDependencies": {
+    "@rdfjs/prefix-map": "^0.1.2",
+    "@tpluscode/rdf-ns-builders": "^4.3.0",
     "@tsconfig/node20": "^20.1.4",
     "@tsconfig/strictest": "^2.0.5",
     "@types/rdf-validate-shacl": "^0.4.7",
+    "@types/rdfjs__prefix-map": "^0.1.5",
     "@zazuko/env-node": "^2.1.3",
     "console-table-printer": "^2.12.1",
     "rdf-validate-shacl": "^0.5.6",
