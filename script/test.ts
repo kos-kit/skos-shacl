@@ -36,12 +36,19 @@ async function getDataFilePaths(
       withFileTypes: true,
     })
   ).flatMap((dirent) => {
-    if (!dirent.isFile()) {
-      return [];
-    }
     if (dirent.name[0] === "." || dirent.name[0] === "_") {
       return [];
     }
+
+    const parentDirectoryName = path.basename(dirent.parentPath);
+    if (parentDirectoryName[0] === "." || parentDirectoryName[0] === "_") {
+      return [];
+    }
+
+    if (!dirent.isFile()) {
+      return [];
+    }
+
     switch (path.extname(dirent.name).toLowerCase()) {
       case ".nt":
       case ".ttl":
@@ -53,8 +60,8 @@ async function getDataFilePaths(
   });
 }
 
-function termToString(term: Term | null): string {
-  if (term === null) {
+function termToString(term: Term | null | undefined): string {
+  if (term == null) {
     return "";
   }
   switch (term.termType) {
@@ -93,33 +100,52 @@ async function main() {
       const validator = new SHACLValidator(shapesGraph, { factory: rdf });
       const report = validator.validate(dataGraph);
 
-      console.log(
-        `${shapesFileName}: ${
-          report.conforms ? "conforms" : "does not conform"
-        }`
-      );
       if (report.conforms) {
+        console.log(
+          `${shapesFileName}: ${dataFilePath} conforms (${report.results.length} results)\n`
+        );
         continue;
+      } else {
+        console.log(
+          `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results)`
+        );
       }
+
       if (valid) {
         exitCode++;
       }
+
       printTable(
-        report.results.flatMap((result, resultI) =>
-          result.message.map((message) => ({
+        report.results.flatMap((result, resultI) => {
+          const resultProperties = {
             "#": resultI,
             shapesFileName,
-            message: termToString(message),
             severity: termToString(result.severity),
-            path: termToString(result.path),
             focusNode: termToString(result.focusNode),
+            message: "",
+            path: termToString(result.path),
             sourceConstraintComponent: termToString(
               result.sourceConstraintComponent
             ),
             sourceShape: termToString(result.sourceShape),
-          }))
-        )
+            value: termToString(result.value),
+          };
+          if (result.message.length === 1) {
+            resultProperties.message = termToString(result.message[0]);
+            return [resultProperties];
+          } else {
+            const printableResults: any[] = [resultProperties];
+            for (const message of result.message) {
+              printableResults.push({
+                ...resultProperties,
+                message: termToString(message),
+              });
+            }
+            return printableResults;
+          }
+        })
       );
+      console.log("");
     }
   }
 }
