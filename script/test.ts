@@ -7,6 +7,8 @@ import { printTable } from "console-table-printer";
 import PrefixMap from "@rdfjs/prefix-map/PrefixMap.js";
 import { sh, skos } from "@tpluscode/rdf-ns-builders";
 import { Term } from "@rdfjs/types";
+import { pino } from "pino";
+import { boolean, command, flag, run } from "cmd-ts";
 
 const rootDirectoryPath = path.resolve(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -75,79 +77,111 @@ function termToString(term: Term | null | undefined): string {
   }
 }
 
-async function main() {
-  let exitCode = 0;
-
-  for (const { dataFilePath, valid } of (
-    await getDataFilePaths(validDataDirectoryPath)
-  )
-    .map((dataFilePath) => ({ dataFilePath, valid: true }))
-    .concat(
-      (await getDataFilePaths(invalidDataDirectoryPath)).map(
-        (dataFilePath) => ({ dataFilePath, valid: false })
-      )
-    )) {
-    const dataGraph = await rdf.dataset().import(rdf.fromFile(dataFilePath));
-
-    console.log("Data file:", dataFilePath);
-
-    const shapesGraph = rdf.dataset();
-    // Add shapes progressively, validating on each pass
-    for (const shapesFileName of shapesFileOrder) {
-      const shapesFilePath = path.join(shapesDirectoryPath, shapesFileName);
-      await shapesGraph.import(rdf.fromFile(shapesFilePath));
-
-      const validator = new SHACLValidator(shapesGraph, { factory: rdf });
-      const report = validator.validate(dataGraph);
-
-      if (report.conforms) {
-        console.log(
-          `${shapesFileName}: ${dataFilePath} conforms (${report.results.length} results)\n`
-        );
-        continue;
-      } else {
-        console.log(
-          `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results)`
-        );
-      }
-
-      if (valid) {
-        exitCode++;
-      }
-
-      printTable(
-        report.results.flatMap((result, resultI) => {
-          const resultProperties = {
-            "#": resultI,
-            shapesFileName,
-            severity: termToString(result.severity),
-            focusNode: termToString(result.focusNode),
-            message: "",
-            path: termToString(result.path),
-            sourceConstraintComponent: termToString(
-              result.sourceConstraintComponent
-            ),
-            sourceShape: termToString(result.sourceShape),
-            value: termToString(result.value),
-          };
-          if (result.message.length === 1) {
-            resultProperties.message = termToString(result.message[0]);
-            return [resultProperties];
-          } else {
-            const printableResults: any[] = [resultProperties];
-            for (const message of result.message) {
-              printableResults.push({
-                ...resultProperties,
-                message: termToString(message),
-              });
-            }
-            return printableResults;
-          }
-        })
+run(
+  command({
+    name: "test",
+    args: {
+      debug: flag({
+        long: "debug",
+        short: "d",
+      }),
+    },
+    handler: async ({ debug }) => {
+      let exitCode = 0;
+      const logger = pino(
+        {
+          level: debug ? "debug" : "info",
+        },
+        pino.destination(2)
       );
-      console.log("");
-    }
-  }
-}
 
-await main();
+      for (const { dataFilePath, valid } of (
+        await getDataFilePaths(validDataDirectoryPath)
+      )
+        .map((dataFilePath) => ({ dataFilePath, valid: true }))
+        .concat(
+          (await getDataFilePaths(invalidDataDirectoryPath)).map(
+            (dataFilePath) => ({ dataFilePath, valid: false })
+          )
+        )) {
+        const dataFileName = path.basename(dataFilePath);
+        const dataGraph = await rdf
+          .dataset()
+          .import(rdf.fromFile(dataFilePath));
+
+        logger.debug("Data file:", dataFilePath);
+
+        const shapesGraph = rdf.dataset();
+        // Add shapes progressively, validating on each pass
+        for (const shapesFileName of shapesFileOrder) {
+          const shapesFilePath = path.join(shapesDirectoryPath, shapesFileName);
+          await shapesGraph.import(rdf.fromFile(shapesFilePath));
+
+          const validator = new SHACLValidator(shapesGraph, { factory: rdf });
+          const report = validator.validate(dataGraph);
+
+          if (report.conforms) {
+            if (valid) {
+              logger.debug(`${shapesFileName}: ${dataFilePath} conforms`);
+            } else {
+              logger.info(
+                `${shapesFileName}: ${dataFilePath} conforms but should not`
+              );
+              exitCode++;
+            }
+            continue;
+          }
+
+          // Non-conformant
+
+          if (valid) {
+            logger.debug(
+              `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results) but should`
+            );
+            exitCode++;
+          } else {
+            logger.debug(
+              `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results) and should not`
+            );
+          }
+
+          if (logger.isLevelEnabled("debug")) {
+            printTable(
+              report.results.flatMap((result, resultI) => {
+                const resultProperties = {
+                  "#": resultI,
+                  dataFileName,
+                  shapesFileName,
+                  severity: termToString(result.severity),
+                  focusNode: termToString(result.focusNode),
+                  message: "",
+                  path: termToString(result.path),
+                  sourceConstraintComponent: termToString(
+                    result.sourceConstraintComponent
+                  ),
+                  sourceShape: termToString(result.sourceShape),
+                  value: termToString(result.value),
+                };
+                if (result.message.length === 1) {
+                  resultProperties.message = termToString(result.message[0]);
+                  return [resultProperties];
+                } else {
+                  const printableResults: any[] = [resultProperties];
+                  for (const message of result.message) {
+                    printableResults.push({
+                      ...resultProperties,
+                      message: termToString(message),
+                    });
+                  }
+                  return printableResults;
+                }
+              })
+            );
+            console.log("");
+          }
+        }
+      }
+    },
+  }),
+  process.argv.slice(2)
+);
