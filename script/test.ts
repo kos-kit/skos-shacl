@@ -135,7 +135,7 @@ run(
           // Non-conformant
 
           if (valid) {
-            logger.debug(
+            logger.info(
               `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results) but should`
             );
             exitCode++;
@@ -181,6 +181,8 @@ run(
           }
         }
       }
+
+      process.exit(exitCode);
     },
   }),
   process.argv.slice(2)
