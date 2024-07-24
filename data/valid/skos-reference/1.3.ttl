@@ -1,0 +1,20 @@
+@prefix : <http://kos-kit.github.io/skos-shacl/ns#> .
+@prefix dct: <http://purl.org/dc/terms/> .
+@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix skos: <http://www.w3.org/2004/02/skos/core#> .
+
+<A> rdf:type skos:Concept ;
+  skos:prefLabel "love"@en ;
+  skos:altLabel "adoration"@en ;
+  skos:broader <B> ;
+  skos:inScheme <S> .
+
+<B> rdf:type skos:Concept ;
+  skos:prefLabel "emotion"@en ;
+  skos:altLabel "feeling"@en ;
+  skos:topConceptOf <S> .
+
+<S> rdf:type skos:ConceptScheme ;
+  dct:title "My First Thesaurus" ;
+  skos:hasTopConcept <B> .
