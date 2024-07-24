@@ -19,6 +19,7 @@ const prefixMap = new PrefixMap(
     ["hasset", rdf.namedNode("https://hasset.ukdataservice.ac.uk/")],
     ["sh", sh[""]],
     ["skos", skos[""]],
+    ["unesco", rdf.namedNode("http://vocabularies.unesco.org/")],
   ],
   { factory: rdf }
 );
