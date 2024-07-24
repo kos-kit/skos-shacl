@@ -39,7 +39,7 @@ async function getDataFilePaths(
     if (!dirent.isFile()) {
       return [];
     }
-    if (dirent.name[0] === ".") {
+    if (dirent.name[0] === "." || dirent.name[0] === "_") {
       return [];
     }
     switch (path.extname(dirent.name).toLowerCase()) {
