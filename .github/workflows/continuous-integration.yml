@@ -12,5 +12,4 @@ jobs:
           cache: npm
           node-version: 20
       - run: script/bootstrap
-      - uses: actions/cache@v4
       - run: script/cibuild
