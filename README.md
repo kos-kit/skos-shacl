@@ -10,8 +10,9 @@
 ## Structure of this repository
 
 - `.github/`: GitHub Actions workflow for running tests
+- `data/`: valid and invalid SKOS test data
 - `shapes/`: SKOS shape definitions in Turtle
-- `tests/`: valid and invalid SKOS test data
+- `script/`: shell scripts conforming to the [Scripts To Rule Them All](https://github.com/github/scripts-to-rule-them-all) patterns
 
 ## Alternatives
 
