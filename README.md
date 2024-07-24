@@ -1,6 +1,6 @@
-# skos-shacl: [SHACL](https://www.w3.org/TR/shacl/) shapes for [SKOS](https://www.w3.org/2004/02/skos/)
+# skos-shacl
 
-SHACL shapes for SKOS that:
+[SHACL](https://www.w3.org/TR/shacl/) shapes for [SKOS](https://www.w3.org/2004/02/skos/) that:
 
 - Clearly delineate constraints derived directly from the SKOS specification from "opinions"
 - Support SKOS-XL as well as SKOS
