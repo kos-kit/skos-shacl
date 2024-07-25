@@ -7,8 +7,12 @@ import { printTable } from "console-table-printer";
 import PrefixMap from "@rdfjs/prefix-map/PrefixMap.js";
 import { sh, skos } from "@tpluscode/rdf-ns-builders";
 import { Term } from "@rdfjs/types";
-import { pino } from "pino";
-import { boolean, command, flag, run } from "cmd-ts";
+import { Logger, pino } from "pino";
+import { command, flag, oneOf, option, run } from "cmd-ts";
+import { execFile } from "node:child_process";
+import which from "which";
+import { Dataset } from "@zazuko/env/lib/DatasetExt.js";
+import * as tmp from "tmp-promise";
 
 const rootDirectoryPath = path.resolve(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
@@ -77,6 +81,112 @@ function termToString(term: Term | null | undefined): string {
   }
 }
 
+type Validator = (kwds: {
+  dataFilePath: string;
+  logger: Logger;
+  shapesFileName: string;
+  shapesGraph: Dataset;
+}) => Promise<boolean>;
+
+async function jenaValidator(): Promise<readonly Validator[]> {
+  const jenaShacl = await which("shacl", { nothrow: true });
+  if (jenaShacl === null) {
+    return [];
+  }
+
+  return [
+    async ({ dataFilePath, logger, shapesGraph }) => {
+      return await tmp.withFile(
+        async ({ path: shapesFilePath }) => {
+          await fs.promises.writeFile(
+            shapesFilePath,
+            await shapesGraph.serialize({ format: "application/n-triples" })
+          );
+
+          const args: string[] = [
+            "validate",
+            "--data",
+            dataFilePath,
+            "--shapes",
+            shapesFilePath,
+            "--text",
+          ];
+          // if (!logger.isLevelEnabled("debug")) {
+          //   args.push("-q");
+          // }
+          return await new Promise((resolve, reject) => {
+            execFile(jenaShacl, args, (error, stdout, stderr) => {
+              if (logger.isLevelEnabled("debug")) {
+                process.stderr.write(stderr);
+                process.stdout.write(stdout);
+              }
+              if (error == null) {
+                resolve(true);
+              } else if (typeof error.code === "number") {
+                resolve(false);
+              } else {
+                reject(error);
+              }
+            });
+          });
+        },
+        { postfix: ".nt" }
+      );
+    },
+  ];
+}
+
+const zazukoValidator: Validator = async ({
+  dataFilePath,
+  logger,
+  shapesFileName,
+  shapesGraph,
+}) => {
+  const dataFileName = path.basename(dataFilePath);
+
+  const dataGraph = await rdf.dataset().import(rdf.fromFile(dataFilePath));
+
+  const validator = new SHACLValidator(shapesGraph, { factory: rdf });
+  const report = validator.validate(dataGraph);
+
+  if (!report.conforms && logger.isLevelEnabled("debug")) {
+    printTable(
+      report.results.flatMap((result, resultI) => {
+        const resultProperties = {
+          "#": resultI,
+          dataFileName,
+          shapesFileName,
+          severity: termToString(result.severity),
+          focusNode: termToString(result.focusNode),
+          message: "",
+          path: termToString(result.path),
+          sourceConstraintComponent: termToString(
+            result.sourceConstraintComponent
+          ),
+          sourceShape: termToString(result.sourceShape),
+          value: termToString(result.value),
+        };
+        if (result.message.length === 1) {
+          resultProperties.message = termToString(result.message[0]);
+          return [resultProperties];
+        } else {
+          const printableResults: any[] = [resultProperties];
+          for (const message of result.message) {
+            printableResults.push({
+              ...resultProperties,
+              message: termToString(message),
+            });
+          }
+          return printableResults;
+        }
+      })
+    );
+    console.log("");
+  }
+
+  return report.conforms;
+};
+
 run(
   command({
     name: "test",
@@ -85,15 +195,35 @@ run(
         long: "debug",
         short: "d",
       }),
+      validator: option({
+        defaultValue: () => "",
+        description: "use a specific validator",
+        long: "validator",
+        type: oneOf(["jena", "zazuko"]),
+      }),
     },
-    handler: async ({ debug }) => {
+    handler: async ({ debug, validator }) => {
       let exitCode = 0;
+
       const logger = pino(
         {
           level: debug ? "debug" : "info",
         },
         pino.destination(2)
       );
+
+      const validators: Validator[] = [];
+      if (validator.length === 0) {
+        validators.push(...(await jenaValidator()));
+      } else if (validator === "jena") {
+        validators.push(...(await jenaValidator()));
+        if (validators.length === 0) {
+          throw new Error("no Jena shacl command line program found");
+        }
+      }
+      if (validator.length === 0 || validator === "zazuko") {
+        validators.push(zazukoValidator);
+      }
 
       for (const { dataFilePath, valid } of (
         await getDataFilePaths(validDataDirectoryPath)
@@ -104,23 +234,38 @@ run(
             (dataFilePath) => ({ dataFilePath, valid: false })
           )
         )) {
-        const dataFileName = path.basename(dataFilePath);
-        const dataGraph = await rdf
-          .dataset()
-          .import(rdf.fromFile(dataFilePath));
-
-        logger.debug("Data file:", dataFilePath);
+        logger.debug("Data file: %s", dataFilePath);
 
         const shapesGraph = rdf.dataset();
         // Add shapes progressively, validating on each pass
         for (const shapesFileName of shapesFileOrder) {
-          const shapesFilePath = path.join(shapesDirectoryPath, shapesFileName);
-          await shapesGraph.import(rdf.fromFile(shapesFilePath));
+          await shapesGraph.import(
+            rdf.fromFile(path.join(shapesDirectoryPath, shapesFileName))
+          );
 
-          const validator = new SHACLValidator(shapesGraph, { factory: rdf });
-          const report = validator.validate(dataGraph);
+          const validatorResultsArray: boolean[] = [];
+          for (const validator of validators) {
+            validatorResultsArray.push(
+              await validator({
+                dataFilePath,
+                logger,
+                shapesFileName,
+                shapesGraph,
+              })
+            );
+          }
 
-          if (report.conforms) {
+          const validatorResultsSet = new Set(validatorResultsArray);
+          if (validatorResultsSet.size !== 1) {
+            logger.warn(
+              "validators disagree on conformance: %s",
+              JSON.stringify(validatorResultsArray)
+            );
+            continue;
+          }
+          const conforms = [...validatorResultsSet][0]!;
+
+          if (conforms) {
             if (valid) {
               logger.debug(`${shapesFileName}: ${dataFilePath} conforms`);
             } else {
@@ -129,55 +274,18 @@ run(
               );
               exitCode++;
             }
-            continue;
-          }
-
-          // Non-conformant
-
-          if (valid) {
-            logger.info(
-              `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results) but should`
-            );
-            exitCode++;
           } else {
-            logger.debug(
-              `${shapesFileName}: ${dataFilePath} does not conform (${report.results.length} results) and should not`
-            );
-          }
-
-          if (logger.isLevelEnabled("debug")) {
-            printTable(
-              report.results.flatMap((result, resultI) => {
-                const resultProperties = {
-                  "#": resultI,
-                  dataFileName,
-                  shapesFileName,
-                  severity: termToString(result.severity),
-                  focusNode: termToString(result.focusNode),
-                  message: "",
-                  path: termToString(result.path),
-                  sourceConstraintComponent: termToString(
-                    result.sourceConstraintComponent
-                  ),
-                  sourceShape: termToString(result.sourceShape),
-                  value: termToString(result.value),
-                };
-                if (result.message.length === 1) {
-                  resultProperties.message = termToString(result.message[0]);
-                  return [resultProperties];
-                } else {
-                  const printableResults: any[] = [resultProperties];
-                  for (const message of result.message) {
-                    printableResults.push({
-                      ...resultProperties,
-                      message: termToString(message),
-                    });
-                  }
-                  return printableResults;
-                }
-              })
-            );
-            console.log("");
+            // Non-conformant
+            if (valid) {
+              logger.info(
+                `${shapesFileName}: ${dataFilePath} does not conform but should`
+              );
+              exitCode++;
+            } else {
+              logger.debug(
+                `${shapesFileName}: ${dataFilePath} does not conform and should not`
+              );
+            }
           }
         }
       }
