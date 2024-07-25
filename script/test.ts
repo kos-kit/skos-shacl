@@ -13,7 +13,10 @@ import { execFile } from "node:child_process";
 import which from "which";
 import { Dataset } from "@zazuko/env/lib/DatasetExt.js";
 import * as tmp from "tmp-promise";
+import { Readable } from "stream";
+import { promisify } from "node:util";
 
+const execFilePromisified = promisify(execFile);
 const rootDirectoryPath = path.resolve(
   path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 );
@@ -109,26 +112,22 @@ async function jenaValidator(): Promise<readonly Validator[]> {
             dataFilePath,
             "--shapes",
             shapesFilePath,
-            "--text",
           ];
           // if (!logger.isLevelEnabled("debug")) {
           //   args.push("-q");
           // }
-          return await new Promise((resolve, reject) => {
-            execFile(jenaShacl, args, (error, stdout, stderr) => {
-              if (logger.isLevelEnabled("debug")) {
-                process.stderr.write(stderr);
-                process.stdout.write(stdout);
-              }
-              if (error == null) {
-                resolve(true);
-              } else if (typeof error.code === "number") {
-                resolve(false);
-              } else {
-                reject(error);
-              }
-            });
-          });
+          const { stdout } = await execFilePromisified(jenaShacl, args);
+          if (logger.isLevelEnabled("debug")) {
+            process.stdout.write(stdout);
+          }
+          const coalescedStdout = stdout.replace(/\s+/g, " ").trim();
+          if (coalescedStdout.indexOf("sh:conforms true") !== -1) {
+            return true;
+          } else if (coalescedStdout.indexOf("sh:conforms false") !== -1) {
+            return false;
+          } else {
+            throw new Error("unable to find sh:conforms statement:\n" + stdout);
+          }
         },
         { postfix: ".nt" }
       );
@@ -191,6 +190,11 @@ run(
   command({
     name: "test",
     args: {
+      data: option({
+        defaultValue: () => "",
+        long: "data",
+        type: oneOf(["invalid", "valid"]),
+      }),
       debug: flag({
         long: "debug",
         short: "d",
@@ -202,7 +206,7 @@ run(
         type: oneOf(["jena", "zazuko"]),
       }),
     },
-    handler: async ({ debug, validator }) => {
+    handler: async ({ data, debug, validator }) => {
       let exitCode = 0;
 
       const logger = pino(
@@ -225,15 +229,23 @@ run(
         validators.push(zazukoValidator);
       }
 
-      for (const { dataFilePath, valid } of (
-        await getDataFilePaths(validDataDirectoryPath)
-      )
-        .map((dataFilePath) => ({ dataFilePath, valid: true }))
-        .concat(
-          (await getDataFilePaths(invalidDataDirectoryPath)).map(
+      const dataFilePaths: { dataFilePath: string; valid: boolean }[] = [];
+      if (data.length === 0 || data === "valid") {
+        dataFilePaths.push(
+          ...(await getDataFilePaths(validDataDirectoryPath)).map(
+            (dataFilePath) => ({ dataFilePath, valid: true })
+          )
+        );
+      }
+      if (data.length === 0 || data === "invalid") {
+        dataFilePaths.push(
+          ...(await getDataFilePaths(invalidDataDirectoryPath)).map(
             (dataFilePath) => ({ dataFilePath, valid: false })
           )
-        )) {
+        );
+      }
+
+      for (const { dataFilePath, valid } of dataFilePaths) {
         logger.debug("Data file: %s", dataFilePath);
 
         const shapesGraph = rdf.dataset();
