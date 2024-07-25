@@ -3,9 +3,10 @@
 [SHACL](https://www.w3.org/TR/shacl/) shapes for [SKOS](https://www.w3.org/2004/02/skos/) that:
 
 - Clearly delineate constraints derived directly from the SKOS specification from "opinions"
-- Support SKOS-XL as well as SKOS
+- Model SKOS-XL as well as SKOS
 - Do not use SPARQL-based constraints
 - Validate shapes against real-world SKOS data graphs such as [AGROVOC](https://agrovoc.fao.org/browse/agrovoc/en/) and the [UNESCO Thesaurus](https://vocabularies.unesco.org/browser/thesaurus/en/)
+- Support code and form generation from SHACL in addition to validation
 
 ## Structure of this repository
 
