@@ -13,7 +13,6 @@ import { execFile } from "node:child_process";
 import which from "which";
 import { Dataset } from "@zazuko/env/lib/DatasetExt.js";
 import * as tmp from "tmp-promise";
-import { Readable } from "stream";
 import { promisify } from "node:util";
 
 const execFilePromisified = promisify(execFile);
