@@ -32,7 +32,7 @@ const prefixMap = new PrefixMap(
   { factory: rdf }
 );
 const shapesDirectoryPath = path.join(rootDirectoryPath, "shapes");
-const shapesFileOrder = ["skos-shacl-spec.ttl"];
+const shapesFileOrder = ["skos-reference.shacl.ttl"];
 const validDataDirectoryPath = path.join(dataDirectoryPath, "valid");
 
 async function getDataFilePaths(
