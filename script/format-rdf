@@ -1,0 +1,11 @@
+#!/bin/bash
+
+set -e
+
+cd "$(dirname "$0")/.."
+
+rapper -i turtle -o turtle shapes/skos-reference.shacl.ttl >temp.ttl
+mv -f temp.ttl shapes/skos-reference.shacl.ttl
+
+rapper -i turtle -o turtle shapes/skos-shaclmate.shacl.ttl >temp.ttl
+mv -f temp.ttl shapes/skos-shaclmate.shacl.ttl
