@@ -222,6 +222,7 @@ skos-xl:Label
     sh:property [
         sh:minCount 1 ;
         sh:or dash:StringOrLangString ;
+        sh:name "literalForm" ;
         sh:path skos-xl:literalForm
     ] .
 
