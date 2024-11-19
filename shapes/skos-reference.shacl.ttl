@@ -10,27 +10,6 @@
     ] ;
     sh:property [
         sh:class :Concept ;
-        sh:path [
-            sh:inversePath skos:narrower
-        ]
-    ], [
-        sh:class :Concept ;
-        sh:path skos:narrowerTransitive
-    ], [
-        sh:class :Concept ;
-        sh:path [
-            sh:inversePath skos:narrowerTransitive
-        ]
-    ], [
-        sh:class :Concept ;
-        sh:path skos:related
-    ], [
-        sh:class :Concept ;
-        sh:path [
-            sh:inversePath skos:related
-        ]
-    ], [
-        sh:class :Concept ;
         sh:path skos:semanticRelation
     ], [
         sh:class :Concept ;
@@ -56,6 +35,27 @@
     ], [
         sh:class :Concept ;
         sh:path skos:narrower
+    ], [
+        sh:class :Concept ;
+        sh:path [
+            sh:inversePath skos:narrower
+        ]
+    ], [
+        sh:class :Concept ;
+        sh:path skos:narrowerTransitive
+    ], [
+        sh:class :Concept ;
+        sh:path [
+            sh:inversePath skos:narrowerTransitive
+        ]
+    ], [
+        sh:class :Concept ;
+        sh:path skos:related
+    ], [
+        sh:class :Concept ;
+        sh:path [
+            sh:inversePath skos:related
+        ]
     ] ;
     sh:targetClass skos:Concept .
 
