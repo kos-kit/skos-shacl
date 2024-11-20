@@ -10,17 +10,6 @@
     ] ;
     sh:property [
         sh:class :Concept ;
-        sh:path skos:semanticRelation
-    ], [
-        sh:class :Concept ;
-        sh:path [
-            sh:inversePath skos:semanticRelation
-        ]
-    ], [
-        sh:class :Concept ;
-        sh:path skos:broader
-    ], [
-        sh:class :Concept ;
         sh:path [
             sh:inversePath skos:broader
         ]
@@ -56,6 +45,17 @@
         sh:path [
             sh:inversePath skos:related
         ]
+    ], [
+        sh:class :Concept ;
+        sh:path skos:semanticRelation
+    ], [
+        sh:class :Concept ;
+        sh:path [
+            sh:inversePath skos:semanticRelation
+        ]
+    ], [
+        sh:class :Concept ;
+        sh:path skos:broader
     ] ;
     sh:targetClass skos:Concept .
 
